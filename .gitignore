@@ -1,6 +1,6 @@
 # Secrets
 .env
-
+1.txt
 # Python
 __pycache__/
 *.pyc
