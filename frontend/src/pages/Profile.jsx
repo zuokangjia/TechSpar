@@ -168,7 +168,92 @@ const styles = {
     padding: 60,
     color: "var(--text-dim)",
   },
+  chartCard: {
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "var(--radius)",
+    padding: "20px 24px",
+  },
 };
+
+function getScoreColor(score) {
+  if (score >= 8) return "var(--green)";
+  if (score >= 6) return "var(--accent-light)";
+  if (score >= 4) return "#e2b93b";
+  return "var(--red)";
+}
+
+function ScoreChart({ history }) {
+  if (!history || history.length < 2) return null;
+
+  const W = 700, H = 200;
+  const PAD = { top: 20, right: 20, bottom: 32, left: 36 };
+  const innerW = W - PAD.left - PAD.right;
+  const innerH = H - PAD.top - PAD.bottom;
+
+  const points = history.map((h, i) => ({
+    x: PAD.left + (i / (history.length - 1)) * innerW,
+    y: PAD.top + innerH - (h.avg_score / 10) * innerH,
+    score: h.avg_score,
+    date: h.date,
+    topic: h.topic || "简历",
+  }));
+
+  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+  const areaPath = `${linePath} L${points[points.length - 1].x},${PAD.top + innerH} L${points[0].x},${PAD.top + innerH} Z`;
+
+  // Y-axis labels: 0, 5, 10
+  const yLabels = [0, 5, 10];
+
+  // X-axis: show first, middle, last date
+  const xIndices = history.length <= 5
+    ? history.map((_, i) => i)
+    : [0, Math.floor(history.length / 2), history.length - 1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
+      {/* Grid lines */}
+      {yLabels.map((v) => {
+        const y = PAD.top + innerH - (v / 10) * innerH;
+        return (
+          <g key={v}>
+            <line x1={PAD.left} y1={y} x2={W - PAD.right} y2={y} stroke="var(--border)" strokeWidth={1} />
+            <text x={PAD.left - 8} y={y + 4} textAnchor="end" fill="var(--text-dim)" fontSize={11}>{v}</text>
+          </g>
+        );
+      })}
+
+      {/* X labels */}
+      {xIndices.map((i) => (
+        <text key={i} x={points[i].x} y={H - 6} textAnchor="middle" fill="var(--text-dim)" fontSize={11}>
+          {history[i].date?.slice(5)}
+        </text>
+      ))}
+
+      {/* Area fill */}
+      <path d={areaPath} fill="url(#chartGrad)" opacity={0.2} />
+
+      {/* Line */}
+      <path d={linePath} fill="none" stroke="var(--accent-light)" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+
+      {/* Dots */}
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r={4} fill={getScoreColor(p.score)} stroke="var(--bg-card)" strokeWidth={2} />
+          <title>{`${p.date} ${p.topic}: ${p.score}/10`}</title>
+        </g>
+      ))}
+
+      {/* Gradient definition */}
+      <defs>
+        <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--accent-light)" />
+          <stop offset="100%" stopColor="var(--accent-light)" stopOpacity={0} />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
@@ -254,6 +339,16 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* Score Trend */}
+      {(stats.score_history || []).length >= 2 && (
+        <div style={styles.section}>
+          <div style={styles.sectionTitle}>成长趋势</div>
+          <div style={styles.chartCard}>
+            <ScoreChart history={stats.score_history} />
+          </div>
+        </div>
+      )}
 
       {/* Topic Mastery */}
       {Object.keys(profile.topic_mastery || {}).length > 0 && (
