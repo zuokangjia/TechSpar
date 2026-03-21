@@ -35,7 +35,6 @@ export default function Knowledge() {
   const [generating, setGenerating] = useState(false);
 
   const [showAddTopic, setShowAddTopic] = useState(false);
-  const [newTopicKey, setNewTopicKey] = useState("");
   const [newTopicName, setNewTopicName] = useState("");
   const [newTopicIcon, setNewTopicIcon] = useState("FileText");
 
@@ -132,15 +131,14 @@ export default function Knowledge() {
     (coreFiles.length === 1 && coreFiles[0].filename === "README.md" && (coreFiles[0].content?.length || 0) <= 20);
 
   const handleAddTopic = async () => {
-    const key = newTopicKey.trim();
     const name = newTopicName.trim();
-    if (!key || !name) return;
+    if (!name) return;
     try {
-      await createTopic(key, name, newTopicIcon);
-      setNewTopicKey(""); setNewTopicName(""); setNewTopicIcon("FileText");
+      const result = await createTopic(name, newTopicIcon);
+      setNewTopicName(""); setNewTopicIcon("FileText");
       setShowAddTopic(false);
       await refreshTopics();
-      setSelected(key);
+      setSelected(result.key);
     } catch (e) { alert("添加失败: " + e.message); }
   };
 
@@ -217,12 +215,8 @@ export default function Knowledge() {
           <div className="bg-card border border-border rounded-2xl px-6 py-7 md:px-8 w-[380px] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
             <div className="text-lg font-semibold mb-5">新增训练领域</div>
             <div className="mb-3.5">
-              <label className="text-[13px] text-dim mb-1.5 block">标识（英文，用于 API 路径）</label>
-              <input className="w-full px-3 py-2.5 rounded-lg border border-border bg-bg text-text text-sm" placeholder="docker" value={newTopicKey} onChange={(e) => setNewTopicKey(e.target.value)} autoFocus />
-            </div>
-            <div className="mb-3.5">
-              <label className="text-[13px] text-dim mb-1.5 block">显示名称</label>
-              <input className="w-full px-3 py-2.5 rounded-lg border border-border bg-bg text-text text-sm" placeholder="Docker 容器化" value={newTopicName} onChange={(e) => setNewTopicName(e.target.value)} />
+              <label className="text-[13px] text-dim mb-1.5 block">名称</label>
+              <input className="w-full px-3 py-2.5 rounded-lg border border-border bg-bg text-text text-sm" placeholder="Docker 容器化" value={newTopicName} onChange={(e) => setNewTopicName(e.target.value)} autoFocus />
             </div>
             <div className="mb-3.5">
               <label className="text-[13px] text-dim mb-1.5 block">图标</label>
@@ -243,8 +237,8 @@ export default function Knowledge() {
               </div>
             </div>
             <div className="flex gap-2.5 justify-end mt-6">
-              <button className="px-5 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer" onClick={() => { setShowAddTopic(false); setNewTopicKey(""); setNewTopicName(""); setNewTopicIcon("FileText"); }}>取消</button>
-              <button className="px-5 py-2 rounded-lg bg-accent text-white text-[13px] cursor-pointer disabled:opacity-40" onClick={handleAddTopic} disabled={!newTopicKey.trim() || !newTopicName.trim()}>添加</button>
+              <button className="px-5 py-2 rounded-lg border border-border bg-hover text-text text-[13px] cursor-pointer" onClick={() => { setShowAddTopic(false); setNewTopicName(""); setNewTopicIcon("FileText"); }}>取消</button>
+              <button className="px-5 py-2 rounded-lg bg-accent text-white text-[13px] cursor-pointer disabled:opacity-40" onClick={handleAddTopic} disabled={!newTopicName.trim()}>添加</button>
             </div>
           </div>
         </div>

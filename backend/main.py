@@ -1,4 +1,5 @@
 """FastAPI 入口 — 面试模拟系统 API."""
+import re
 import uuid
 from datetime import datetime
 
@@ -404,17 +405,25 @@ def get_topics(user_id: str = Depends(get_current_user)):
 @router.post("/topics")
 def create_topic(body: dict, user_id: str = Depends(get_current_user)):
     """Add a new topic."""
-    key = body.get("key", "").strip()
     name = body.get("name", "").strip()
     icon = body.get("icon", "📝").strip()
-    if not key or not name:
-        raise HTTPException(400, "key and name are required")
+    if not name:
+        raise HTTPException(400, "name is required")
+
+    # Auto-generate a short URL-safe key
+    key = body.get("key", "").strip()
+    if not key:
+        key = uuid.uuid4().hex[:8]
+    # Sanitize: only keep alphanumeric, hyphens, underscores
+    key = re.sub(r'[^a-zA-Z0-9_-]', '', key)
+    if not key:
+        key = uuid.uuid4().hex[:8]
 
     topics = load_topics(user_id)
     if key in topics:
         raise HTTPException(409, f"Topic '{key}' already exists")
 
-    dir_name = body.get("dir", key).strip()
+    dir_name = key
     topics[key] = {"name": name, "icon": icon, "dir": dir_name}
     save_topics(topics, user_id)
 

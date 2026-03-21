@@ -39,18 +39,18 @@ export async function getTopics() {
   return res.json();
 }
 
-export async function createTopic(key, name, icon = "📝") {
+export async function createTopic(name, icon = "📝") {
   const res = await authFetch(`${API_BASE}/topics`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key, name, icon }),
+    body: JSON.stringify({ name, icon }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function deleteTopic(key) {
-  const res = await authFetch(`${API_BASE}/topics/${key}`, { method: "DELETE" });
+  const res = await authFetch(`${API_BASE}/topics/${encodeURIComponent(key)}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -172,12 +172,12 @@ export async function getTopicHistory(topic) {
 // ── Knowledge management ──
 
 export async function getCoreKnowledge(topic) {
-  const res = await authFetch(`${API_BASE}/knowledge/${topic}/core`);
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/core`);
   return res.json();
 }
 
 export async function updateCoreKnowledge(topic, filename, content) {
-  const res = await authFetch(`${API_BASE}/knowledge/${topic}/core/${encodeURIComponent(filename)}`, {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/core/${encodeURIComponent(filename)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content }),
@@ -187,7 +187,7 @@ export async function updateCoreKnowledge(topic, filename, content) {
 }
 
 export async function deleteCoreKnowledge(topic, filename) {
-  const res = await authFetch(`${API_BASE}/knowledge/${topic}/core/${encodeURIComponent(filename)}`, {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/core/${encodeURIComponent(filename)}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await res.text());
@@ -195,7 +195,7 @@ export async function deleteCoreKnowledge(topic, filename) {
 }
 
 export async function createCoreKnowledge(topic, filename, content) {
-  const res = await authFetch(`${API_BASE}/knowledge/${topic}/core`, {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/core`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename, content }),
@@ -205,7 +205,7 @@ export async function createCoreKnowledge(topic, filename, content) {
 }
 
 export async function generateKnowledge(topic) {
-  const res = await authFetch(`${API_BASE}/knowledge/${topic}/generate`, {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/generate`, {
     method: "POST",
   });
   if (!res.ok) throw new Error(await res.text());
@@ -240,12 +240,12 @@ export async function analyzeRecording(transcript, recordingMode, company, posit
 }
 
 export async function getHighFreq(topic) {
-  const res = await authFetch(`${API_BASE}/knowledge/${topic}/high_freq`);
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/high_freq`);
   return res.json();
 }
 
 export async function updateHighFreq(topic, content) {
-  const res = await authFetch(`${API_BASE}/knowledge/${topic}/high_freq`, {
+  const res = await authFetch(`${API_BASE}/knowledge/${encodeURIComponent(topic)}/high_freq`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ content }),
