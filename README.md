@@ -53,6 +53,15 @@ Try TechSpar online: **[https://aari.top/](https://aari.top/)**
   <img src="images/profile-overview.png" alt="Profile" width="800" />
 </p>
 
+<p align="center">
+  <img src="images/profile-analysis.png" alt="Profile" width="800" />
+</p>
+
+<p align="center">
+  <img src="images/1.png" alt="Profile" width="800" />
+</p>
+
+
 ## Tech Stack
 
 | Component | Technology |
