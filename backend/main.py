@@ -618,10 +618,9 @@ async def chat(req: ChatRequest, user_id: str = Depends(get_current_user)):
     graph = entry["graph"]
     config = entry["config"]
 
-    result = graph.invoke(
-        {"messages": [HumanMessage(content=req.message)]},
-        config,
-    )
+    # Inject user message into checkpoint state, then resume from interrupt
+    graph.update_state(config, {"messages": [HumanMessage(content=req.message)]})
+    result = graph.invoke(None, config)
 
     append_message(req.session_id, "user", req.message, user_id=user_id)
 
