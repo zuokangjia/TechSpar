@@ -375,7 +375,9 @@ def _apply_memory_ops(profile: dict, ops: dict, topic: str | None, now: str):
             idx = op.get("index")
             if idx is not None and 0 <= idx < len(weak_points):
                 wp = weak_points[idx]
-                if op.get("new_point"):
+                if op.get("new_point") and op["new_point"] != wp.get("point"):
+                    history = wp.setdefault("history", [])
+                    history.append({"point": wp["point"], "date": wp.get("last_seen", now)})
                     wp["point"] = op["new_point"]
                 wp["times_seen"] = wp.get("times_seen", 1) + 1
                 wp["last_seen"] = now
@@ -383,8 +385,11 @@ def _apply_memory_ops(profile: dict, ops: dict, topic: str | None, now: str):
     for imp in ops.get("improvements", []):
         idx = imp.get("weak_index")
         if idx is not None and 0 <= idx < len(weak_points):
-            weak_points[idx]["improved"] = True
-            weak_points[idx]["improved_at"] = now
+            wp = weak_points[idx]
+            history = wp.setdefault("history", [])
+            history.append({"point": wp["point"], "date": now, "event": "improved"})
+            wp["improved"] = True
+            wp["improved_at"] = now
 
     existing_strong = {s["point"] for s in profile.get("strong_points", [])}
     for op in ops.get("strong_point_ops", []):
@@ -432,8 +437,8 @@ def _deterministic_update(profile: dict, new_weak: list, new_strong: list,
 
 
 def _update_mastery(profile: dict, topic: str | None, mastery_data: dict, now: str,
-                    session_weight: float = 0.7):
-    """Update topic mastery (0-100 scale). session_weight controls merge ratio."""
+                    min_weight: float = 0.15):
+    """Update topic mastery (0-100 scale). Weight decreases with session count."""
     if not mastery_data:
         return
     # {score, notes} → single topic; {topic_key: {score, notes}} → multi-topic
@@ -450,43 +455,71 @@ def _update_mastery(profile: dict, topic: str | None, mastery_data: dict, now: s
         existing = profile.setdefault("topic_mastery", {}).setdefault(t, {})
         new_score = data.get("score")
         if new_score is not None:
-            # Backward compat: convert old Lv1-5 to 0-100
             old_score = existing.get("score", existing.get("level", 0) * 20)
-            merged = round(old_score * (1 - session_weight) + new_score * session_weight, 1)
+            n = existing.get("session_count", 0)
+            coverage = data.get("coverage", 1.0)
+            # Dynamic weight: fast convergence early, stable later
+            # Scale down by coverage so partial sessions have less impact
+            weight = max(min_weight, 1.0 / (n + 1)) * coverage
+            merged = round(old_score * (1 - weight) + new_score * weight, 1)
             existing["score"] = merged
+            existing["session_count"] = n + 1
             existing.pop("level", None)
         if data.get("notes"):
             existing["notes"] = data["notes"]
         existing["last_assessed"] = now
 
 
+_DEDUP_SIMILARITY_THRESHOLD = 0.80
+
+
+def _is_semantically_duplicate(new_item: str, existing: list[str], threshold: float = _DEDUP_SIMILARITY_THRESHOLD) -> bool:
+    """Check if new_item is semantically similar to any existing item via embedding."""
+    if not existing:
+        return False
+    from backend.vector_memory import _embed, _cosine_similarity
+    import numpy as np
+    new_vec = _embed(new_item)
+    matrix = np.stack([_embed(e) for e in existing])
+    sims = _cosine_similarity(new_vec, matrix)
+    return float(sims.max()) >= threshold
+
+
+def _append_if_novel(items: list[str], new_item: str, limit: int = 8) -> None:
+    """Append new_item only if semantically novel. Drop oldest if over limit."""
+    if new_item in items:
+        return
+    if _is_semantically_duplicate(new_item, items):
+        return
+    items.append(new_item)
+    if len(items) > limit:
+        items.pop(0)
+
+
 def _update_communication(profile: dict, comm: dict):
-    """Append communication observations."""
+    """Accumulate communication observations, deduplicate via embedding similarity."""
     if not comm:
         return
+    c = profile.setdefault("communication", {})
     if comm.get("style_update"):
-        profile.setdefault("communication", {})["style"] = comm["style_update"]
+        observations = c.setdefault("style_observations", [])
+        _append_if_novel(observations, comm["style_update"], limit=5)
+        c["style"] = observations[-1]
     for habit in comm.get("new_habits", []):
-        habits = profile.setdefault("communication", {}).setdefault("habits", [])
-        if habit not in habits:
-            habits.append(habit)
+        _append_if_novel(c.setdefault("habits", []), habit)
     for sug in comm.get("new_suggestions", []):
-        suggestions = profile.setdefault("communication", {}).setdefault("suggestions", [])
-        if sug not in suggestions:
-            suggestions.append(sug)
+        _append_if_novel(c.setdefault("suggestions", []), sug)
 
 
 def _update_thinking_patterns(profile: dict, patterns: dict):
-    """Append thinking pattern observations."""
+    """Accumulate thinking pattern observations, deduplicate via embedding similarity."""
     if not patterns:
         return
     tp = profile.setdefault("thinking_patterns", {"strengths": [], "gaps": []})
     for s in patterns.get("new_strengths", []):
-        if s not in tp["strengths"]:
-            tp["strengths"].append(s)
+        _append_if_novel(tp["strengths"], s)
     for g in patterns.get("new_gaps", []):
-        if g not in tp["gaps"]:
-            tp["gaps"].append(g)
+        _append_if_novel(tp["gaps"], g)
 
 
 def _update_stats(
@@ -542,7 +575,6 @@ async def llm_update_profile(
     session_summary: str = "",
     avg_score: float | None = None,
     answer_count: int = 0,
-    session_weight: float = 0.7,
     dimension_scores: dict | None = None,
 ):
     """Mem0-style profile update: LLM decides ADD/UPDATE/NOOP for each fact."""
@@ -601,7 +633,7 @@ async def llm_update_profile(
             _deterministic_update(profile, new_weak_points, new_strong_points, topic, now, user_id)
 
     # ── Deterministic updates for mastery / communication / thinking / stats ──
-    _update_mastery(profile, topic, topic_mastery, now, session_weight)
+    _update_mastery(profile, topic, topic_mastery, now)
     _update_communication(profile, communication)
     _update_thinking_patterns(profile, thinking_patterns)
     _update_stats(profile, mode, topic, avg_score, now, answer_count, dimension_scores)

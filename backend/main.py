@@ -370,7 +370,6 @@ async def _update_recording_profile(overall: dict, scores: list, total_items: in
         session_summary=overall.get("summary", ""),
         avg_score=overall.get("avg_score"),
         answer_count=len(valid),
-        session_weight=0.3,
     )
 
 
@@ -1033,12 +1032,11 @@ async def _update_drill_profile(topic: str, overall: dict, scores: list,
             pass
     mastery = overall.get("topic_mastery", {})
     coverage = len(valid) / total_questions if total_questions else 0
-    session_weight = coverage * 0.4  # 1/10 answered → 0.04, 10/10 → 0.4
-
     if valid:
-        # contribution = (difficulty/5) × (score/10), unanswered = 0
+        # contribution = (difficulty/5) × (score/10), divide by answered count only
         contributions = [(d / 5) * (s / 10) for s, d in valid]
-        mastery["score"] = round(sum(contributions) / total_questions * 100, 1)
+        mastery["score"] = round(sum(contributions) / len(valid) * 100, 1)
+        mastery["coverage"] = round(coverage, 2)
     mastery.pop("level", None)  # migrate away from old Lv1-5
 
     await llm_update_profile(
@@ -1053,7 +1051,6 @@ async def _update_drill_profile(topic: str, overall: dict, scores: list,
         session_summary=overall.get("summary", ""),
         avg_score=overall.get("avg_score"),
         answer_count=len(scores),
-        session_weight=session_weight,
     )
 
 
@@ -1068,8 +1065,6 @@ async def _update_job_prep_profile(overall: dict, scores: list, total_questions:
             pass
 
     topic = meta.get("position") or "JD 备面"
-    coverage = len(valid) / total_questions if total_questions else 0
-    session_weight = max(0.25, coverage * 0.5)
     summary = overall.get("summary", "")
     role_fit = overall.get("role_fit_summary", "")
     if role_fit:
@@ -1087,7 +1082,6 @@ async def _update_job_prep_profile(overall: dict, scores: list, total_questions:
         session_summary=summary,
         avg_score=overall.get("avg_score"),
         answer_count=len(valid),
-        session_weight=session_weight,
         dimension_scores=overall.get("dimension_scores"),
     )
 
