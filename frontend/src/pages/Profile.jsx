@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Activity,
-  ArrowUpRight,
   Brain,
   ChevronRight,
   Clock3,
@@ -56,26 +55,32 @@ const ZONE_META = {
   },
 };
 
-const STAGE_META = [
-  {
-    max: 5.5,
-    label: "搭框架期",
-    title: "基础框架已建立，瓶颈在工程化展开",
-    summary: "你已经有明确的答题直觉和部分稳定强项，但首页应该优先暴露反复出现的失分模式。",
+const TRAINING_MODE_META = {
+  resume: {
+    label: "简历面试",
+    accentClassName: "text-primary",
+    borderClassName: "border-l-primary",
+    glowClassName: "shadow-[inset_3px_0_0_rgba(245,158,11,0.18)]",
+    countKey: "resume_sessions",
+    avgKey: "resume_avg_score",
   },
-  {
-    max: 7.5,
-    label: "成型期",
-    title: "答题框架开始稳定，重点补追问深度",
-    summary: "现阶段更需要聚焦高频追问风险，而不是继续把所有观察平铺出来。",
+  topic_drill: {
+    label: "专项训练",
+    accentClassName: "text-green",
+    borderClassName: "border-l-green",
+    glowClassName: "shadow-[inset_3px_0_0_rgba(34,197,94,0.18)]",
+    countKey: "drill_sessions",
+    avgKey: "drill_avg_score",
   },
-  {
-    max: Infinity,
-    label: "冲刺期",
-    title: "主体能力已成型，接下来打磨稳定性和命中率",
-    summary: "页面应该更像冲刺面板，只保留会影响最后表现的关键变量。",
+  jd_prep: {
+    label: "JD 备面",
+    accentClassName: "text-blue-400",
+    borderClassName: "border-l-blue-400",
+    glowClassName: "shadow-[inset_3px_0_0_rgba(96,165,250,0.18)]",
+    countKey: "job_prep_sessions",
+    avgKey: "job_prep_avg_score",
   },
-];
+};
 
 const PAGE_CLASS = "flex-1 w-full max-w-[1600px] mx-auto px-4 py-6 md:px-7 md:py-8 xl:px-10 2xl:px-12";
 
@@ -200,33 +205,66 @@ function SectionHeader({ icon, title, caption, action }) {
   );
 }
 
-function MetricCard({ label, value, hint, accentClassName = "text-primary" }) {
+function TrainingSummaryCard({ label, value, accentClassName, panelClassName }) {
   return (
-    <div className="rounded-2xl border border-border/80 bg-card/78 p-4 backdrop-blur-sm">
-      <div className="text-xs font-medium text-dim">{label}</div>
-      <div className={cn("mt-3 text-[30px] font-bold tracking-tight", accentClassName)}>{value}</div>
-      {hint && <div className="mt-2 text-xs leading-5 text-dim">{hint}</div>}
+    <div className={cn("flex min-h-[128px] flex-col justify-between rounded-[20px] border border-border/70 p-4 md:min-h-[136px] md:p-5", panelClassName)}>
+        <div className="text-[13px] font-medium text-dim md:text-sm">{label}</div>
+        <div className={cn("text-[32px] font-bold leading-none tracking-tight md:text-[36px]", accentClassName)}>{value}</div>
     </div>
   );
 }
 
-function TopicPriorityCard({ item, onSelect }) {
+function TrainingModeCard({ title, count, avgScore, accentClassName, borderClassName, glowClassName, panelClassName }) {
+  return (
+    <div className={cn("rounded-[20px] border border-border/80 border-l-[4px] p-4 md:p-5", borderClassName, glowClassName, panelClassName)}>
+        <div className={cn("text-[14px] font-semibold md:text-[15px]", accentClassName)}>{title}</div>
+
+        <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-[16px] border border-border/60 bg-border/60 dark:bg-white/[0.06]">
+          <div className="bg-white/70 px-3 py-3 text-center dark:bg-black/[0.08]">
+            <div className={cn("text-[26px] font-bold tracking-tight md:text-[30px]", accentClassName)}>{count}</div>
+            <div className="mt-1 text-[11px] text-dim">次数</div>
+          </div>
+          <div className="bg-white/70 px-3 py-3 text-center dark:bg-black/[0.08]">
+            <div className={cn("text-[26px] font-bold tracking-tight md:text-[30px]", accentClassName)}>
+              {avgScore ?? "-"}
+            </div>
+            <div className="mt-1 text-[11px] text-dim">平均分</div>
+          </div>
+        </div>
+    </div>
+  );
+}
+
+function TopicPriorityCard({ item, onSelect, variant = "default", label }) {
+  const featured = variant === "featured";
+
   return (
     <button
       type="button"
       onClick={() => onSelect(item.topic)}
-      className="w-full rounded-[24px] border border-primary/15 bg-[linear-gradient(180deg,rgba(245,158,11,0.06),transparent)] p-5 text-left transition-all hover:-translate-y-px hover:border-primary/35 hover:shadow-sm dark:bg-[linear-gradient(180deg,rgba(245,158,11,0.08),transparent)]"
+      className={cn(
+        "w-full rounded-[24px] border border-primary/15 bg-[linear-gradient(180deg,rgba(245,158,11,0.06),transparent)] text-left transition-all hover:-translate-y-px hover:border-primary/35 hover:shadow-sm dark:bg-[linear-gradient(180deg,rgba(245,158,11,0.08),transparent)]",
+        featured ? "p-6 md:p-7" : "p-5"
+      )}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-lg font-semibold">{item.topic}</div>
+      {label && (
+        <div className="mb-4 inline-flex rounded-full bg-primary/12 px-3 py-1 text-xs font-medium text-primary">
+          {label}
+        </div>
+      )}
+
+      <div className={cn("gap-4", featured ? "flex flex-col sm:flex-row sm:items-start sm:justify-between" : "flex items-start justify-between")}>
+        <div className="min-w-0">
+          <div className={cn("break-words font-semibold", featured ? "text-[28px] leading-tight md:text-[32px]" : "text-lg")}>
+            {item.topic}
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {item.weakCount > 0 && <Badge variant="destructive">待补 {item.weakCount}</Badge>}
             {item.strongCount > 0 && <Badge variant="success">强项 {item.strongCount}</Badge>}
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-xl font-semibold text-primary">
+        <div className="shrink-0 text-right">
+          <div className={cn("font-semibold text-primary", featured ? "text-[28px]" : "text-xl")}>
             {item.score != null ? `${item.score}/100` : "--"}
           </div>
           <div className="mt-1 text-xs text-dim">领域掌握度</div>
@@ -244,7 +282,14 @@ function TopicPriorityCard({ item, onSelect }) {
         {item.note || item.topWeakness || "该领域已有训练记录，但还没有生成明确总结。"}
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-dim">
+      {featured && item.topWeakness && (
+        <div className="mt-4 rounded-2xl border border-border/70 bg-card/84 px-4 py-3">
+          <div className="text-xs font-medium text-dim">当前先补</div>
+          <div className="mt-2 text-sm leading-6">{item.topWeakness}</div>
+        </div>
+      )}
+
+      <div className={cn("mt-4 flex items-center justify-between gap-3 text-xs text-dim", featured && "flex-wrap")}>
         <span>{item.lastSignal ? `最近信号 ${formatShortDate(item.lastSignal)}` : "已有历史训练记录"}</span>
         <span className="inline-flex items-center gap-1 font-medium text-primary">
           查看领域
@@ -585,10 +630,6 @@ function buildDomainInsights(profile, realTopics) {
     });
 }
 
-function getStage(avgScore) {
-  return STAGE_META.find((stage) => (avgScore || 0) <= stage.max) || STAGE_META[0];
-}
-
 function buildModeCounts(stats, history) {
   const counts = history.length
     ? history.reduce((acc, entry) => {
@@ -612,6 +653,31 @@ function buildModeCounts(stats, history) {
       percent: ((counts[mode] || 0) / total) * 100,
     }))
     .filter((item) => item.count > 0);
+}
+
+function buildTrainingModeStats(stats, history) {
+  return Object.entries(TRAINING_MODE_META).map(([mode, meta]) => {
+    const historyEntries = (history || []).filter((entry) => (entry.mode || "topic_drill") === mode);
+    const historyScores = historyEntries
+      .map((entry) => entry.avg_score)
+      .filter((value) => typeof value === "number");
+    const count = Math.max(stats[meta.countKey] || 0, historyEntries.length);
+    const avgScore = typeof stats[meta.avgKey] === "number"
+      ? stats[meta.avgKey]
+      : historyScores.length
+        ? Number((historyScores.reduce((sum, value) => sum + value, 0) / historyScores.length).toFixed(1))
+        : null;
+
+    return {
+      mode,
+      title: meta.label,
+      count,
+      avgScore,
+      accentClassName: meta.accentClassName,
+      borderClassName: meta.borderClassName,
+      glowClassName: meta.glowClassName,
+    };
+  });
 }
 
 function getTrendDelta(history) {
@@ -699,9 +765,7 @@ export default function Profile() {
   const communicationSuggestions = profile.communication?.suggestions || [];
   const masteryMap = profile.topic_mastery || {};
   const realTopicSet = getRealTopicSet(profile, scoreHistory);
-  const stage = getStage(stats.avg_score);
   const priorityWeaknesses = buildPriorityWeaknesses(weakActive, masteryMap);
-  const focusWeaknesses = priorityWeaknesses.slice(0, 3);
   const domains = buildDomainInsights(profile, realTopicSet);
   const focusDomains = domains.filter((item) => item.zone === "focus");
   const buildDomains = domains.filter((item) => item.zone === "build");
@@ -710,28 +774,19 @@ export default function Profile() {
     .map((item) => ({
       ...item,
       topWeakness: priorityWeaknesses.find((weakness) => weakness.topic === item.topic)?.point || "",
-    }))
-    .slice(0, 3);
+    }));
+  const featuredTopic = topicPriorities[0] || null;
+  const secondaryTopic = topicPriorities[1] || null;
+  const extraTopicCount = Math.max(topicPriorities.length - 2, 0);
   const crossBlockers = priorityWeaknesses
     .filter((item) => !(item.topic && realTopicSet.has(item.topic)))
     .slice(0, 4);
+  const visibleCrossBlockers = crossBlockers.slice(0, 2);
+  const hiddenCrossBlockerCount = Math.max(crossBlockers.length - visibleCrossBlockers.length, 0);
   const modeCounts = buildModeCounts(stats, scoreHistory);
+  const trainingModeStats = buildTrainingModeStats(stats, scoreHistory);
   const latestEntry = getLatestEntry(scoreHistory);
   const trendDelta = getTrendDelta(scoreHistory);
-  const nextTopic = (
-    focusWeaknesses.find((item) => item.topic && realTopicSet.has(item.topic))?.topic ||
-    focusDomains[0]?.topic ||
-    buildDomains[0]?.topic ||
-    strongDomains[0]?.topic ||
-    null
-  );
-  const heroBullets = [
-    focusDomains.length > 0
-      ? `当前优先补课：${focusDomains.slice(0, 2).map((item) => item.topic).join(" / ")}`
-      : null,
-    thinkingGaps[0] ? `高频追问风险：${thinkingGaps[0]}` : null,
-    profile.communication?.style ? `表达侧信号：${profile.communication.style}` : null,
-  ].filter(Boolean);
   const answerPatternsSection = (
     <Card className="mt-5 animate-fade-in-up [animation-delay:0.24s]">
       <CardContent className="p-5 md:p-6">
@@ -871,68 +926,41 @@ export default function Profile() {
         </div>
       </div>
 
-      <Card className="mt-5 overflow-hidden border-primary/20 shadow-[0_20px_80px_-48px_rgba(245,158,11,0.5)] animate-fade-in-up bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.18),transparent_36%),linear-gradient(135deg,rgba(255,255,255,0.96),rgba(255,248,235,0.88))] dark:bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.14),transparent_32%),linear-gradient(135deg,rgba(24,24,27,0.96),rgba(39,39,42,0.92))]">
-        <CardContent className="p-6 md:p-7">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(420px,0.95fr)] 2xl:grid-cols-[minmax(0,1.8fr)_minmax(460px,1fr)] xl:items-start">
-            <div>
-              <Badge className="mb-4 bg-primary/12 text-primary">{stage.label}</Badge>
-              <div className="text-[30px] font-semibold leading-tight tracking-tight md:text-[40px]">
-                {stage.title}
-              </div>
-              <div className="mt-4 max-w-4xl text-sm leading-7 text-dim md:text-base">
-                {stage.summary}
-              </div>
+      <Card className="mt-5 animate-fade-in-up [animation-delay:0.04s]">
+        <CardContent className="p-4 md:p-5">
+          <SectionHeader
+            icon={<TrendingUp size={18} />}
+            title="练习统计"
+          />
 
-              {heroBullets.length > 0 && (
-                <div className="mt-5 space-y-2">
-                  {heroBullets.map((line) => (
-                    <div key={line} className="flex items-start gap-2 text-sm leading-6 text-text/90">
-                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                      <span>{line}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+            <TrainingSummaryCard
+              label="总练习次数"
+              value={stats.total_sessions || 0}
+              accentClassName="text-primary"
+              panelClassName="bg-[linear-gradient(135deg,rgba(245,158,11,0.08),rgba(245,158,11,0.02))]"
+            />
+            <TrainingSummaryCard
+              label="综合平均分"
+              value={stats.avg_score ?? "-"}
+              accentClassName="text-green"
+              panelClassName="bg-[linear-gradient(135deg,rgba(34,197,94,0.08),rgba(34,197,94,0.02))]"
+            />
+          </div>
 
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button
-                  variant="gradient"
-                  onClick={() => navigate(nextTopic ? `/profile/topic/${nextTopic}` : "/history")}
-                >
-                  {nextTopic ? `优先补 ${nextTopic}` : "查看训练历史"}
-                  <ArrowUpRight size={16} />
-                </Button>
-                <Button variant="outline" onClick={() => navigate("/history")}>
-                  查看全部记录
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
-              <MetricCard
-                label="总训练"
-                value={stats.total_sessions || 0}
-                hint={`${domains.length} 个真实训练主题已进入画像`}
+          <div className="mt-3 grid gap-3 xl:grid-cols-3">
+            {trainingModeStats.map((item) => (
+              <TrainingModeCard
+                key={item.mode}
+                title={item.title}
+                count={item.count}
+                avgScore={item.avgScore}
+                accentClassName={item.accentClassName}
+                borderClassName={item.borderClassName}
+                glowClassName={item.glowClassName}
+                panelClassName="bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,255,255,0.92))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.04))]"
               />
-              <MetricCard
-                label="综合均分"
-                value={stats.avg_score ?? "-"}
-                hint={`${scoreHistory.length || 0} 次评分历史`}
-                accentClassName="text-green"
-              />
-              <MetricCard
-                label="活跃问题"
-                value={weakActive.length}
-                hint="当前仍在反复出现的薄弱点"
-                accentClassName="text-red"
-              />
-              <MetricCard
-                label="已改善"
-                value={weakImproved.length}
-                hint="已经出现闭环改善的历史问题"
-                accentClassName="text-primary"
-              />
-            </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -944,39 +972,73 @@ export default function Profile() {
               icon={<Target size={18} />}
               title="当前重点"
               caption="把真实训练领域和跨领域阻塞拆开，避免继续混成同一类卡片。"
+              action={(
+                <Button variant="outline" size="sm" onClick={() => navigate("/history")}>
+                  查看全部记录
+                </Button>
+              )}
             />
 
-            <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-              <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <div className="text-sm font-semibold">优先补的领域</div>
-                  <Badge variant="secondary">{topicPriorities.length}</Badge>
+            <div className="mt-5 space-y-4">
+              {featuredTopic ? (
+                <TopicPriorityCard
+                  item={featuredTopic}
+                  onSelect={(topic) => navigate(`/profile/topic/${topic}`)}
+                  variant="featured"
+                  label="主推荐领域"
+                />
+              ) : (
+                <div className="rounded-[24px] border border-dashed border-border/80 px-5 py-8 text-sm text-dim">
+                  目前没有可继续追踪的真实训练领域。
                 </div>
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
-                  {topicPriorities.length > 0 ? topicPriorities.map((item) => (
+              )}
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+                <div>
+                  <div className="mb-3 flex items-center gap-2">
+                    <div className="text-sm font-semibold">下一顺位</div>
+                    <Badge variant="secondary">{secondaryTopic ? 1 : 0}</Badge>
+                  </div>
+
+                  {secondaryTopic ? (
                     <TopicPriorityCard
-                      key={item.topic}
-                      item={item}
+                      item={secondaryTopic}
                       onSelect={(topic) => navigate(`/profile/topic/${topic}`)}
+                      label="次推荐"
                     />
-                  )) : (
-                    <div className="rounded-2xl border border-dashed border-border/80 px-4 py-8 text-sm text-dim md:col-span-2">
-                      目前没有可继续追踪的真实训练领域。
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border/80 px-4 py-8 text-sm text-dim">
+                      当前没有第二优先级领域，先把主推荐打透。
+                    </div>
+                  )}
+
+                  {extraTopicCount > 0 && (
+                    <div className="mt-3 rounded-2xl border border-border/70 bg-black/[0.02] px-4 py-3 text-xs leading-5 text-dim dark:bg-white/[0.02]">
+                      还有 {extraTopicCount} 个领域在排队，完整列表放在下方能力地图，不再挤进首页主视图。
                     </div>
                   )}
                 </div>
-              </div>
 
-              <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <div className="text-sm font-semibold">跨领域阻塞</div>
-                  <Badge variant="destructive">{crossBlockers.length}</Badge>
-                </div>
                 <div className="rounded-[24px] border border-border/80 bg-card/70 p-4">
-                  <div className="mb-4 text-sm leading-6 text-dim">
-                    这些问题会跨多个场景反复出现，但不属于单一训练领域，所以不再伪装成可点击的 topic。
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold">共性阻塞</div>
+                      <div className="mt-1 text-xs leading-5 text-dim">
+                        这些问题会跨多个场景反复出现，不属于单一领域，所以单独收口，不再伪装成可点击的 topic。
+                      </div>
+                    </div>
+                    <Badge variant="destructive">{crossBlockers.length}</Badge>
                   </div>
-                  <CrossBlockerList items={crossBlockers} />
+
+                  <div className="mt-4">
+                    <CrossBlockerList items={visibleCrossBlockers} />
+                  </div>
+
+                  {hiddenCrossBlockerCount > 0 && (
+                    <div className="mt-3 text-xs leading-5 text-dim">
+                      其余 {hiddenCrossBlockerCount} 条保留在证据库里，避免首页继续堆叠重复诊断。
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1112,7 +1174,7 @@ export default function Profile() {
             caption="这里只显示真实训练主题，不再把画像标签误当成领域。"
           />
 
-          <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          <div className="mt-5 grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">
             <DomainZoneColumn zone="focus" items={focusDomains} onSelect={(topic) => navigate(`/profile/topic/${topic}`)} />
             <DomainZoneColumn zone="build" items={buildDomains} onSelect={(topic) => navigate(`/profile/topic/${topic}`)} />
             <DomainZoneColumn zone="strong" items={strongDomains} onSelect={(topic) => navigate(`/profile/topic/${topic}`)} />
