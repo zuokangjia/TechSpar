@@ -548,14 +548,16 @@ async def generate_retrospective(topic: str, user_id: str = Depends(get_current_
     retrospective = response.content.strip()
 
     # Cache in profile
+    generated_at = datetime.now().isoformat()
     profile.setdefault("topic_mastery", {}).setdefault(topic, {})["retrospective"] = retrospective
-    profile["topic_mastery"][topic]["retrospective_at"] = datetime.now().isoformat()
+    profile["topic_mastery"][topic]["retrospective_at"] = generated_at
     _save_profile(profile, user_id)
 
     return {
         "topic": topic,
         "topic_name": topic_name,
         "retrospective": retrospective,
+        "retrospective_at": generated_at,
         "session_count": len(sessions),
     }
 

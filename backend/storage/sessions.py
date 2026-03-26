@@ -143,7 +143,7 @@ def list_sessions_by_topic(topic: str, *, user_id: str, limit: int = 50) -> list
     """Get all sessions for a topic with reviews and scores."""
     conn = _get_conn()
     rows = conn.execute(
-        "SELECT session_id, mode, topic, review, scores, created_at FROM sessions "
+        "SELECT session_id, mode, topic, review, scores, weak_points, overall, created_at FROM sessions "
         "WHERE topic = ? AND user_id = ? AND review IS NOT NULL ORDER BY created_at ASC LIMIT ?",
         (topic, user_id, limit),
     ).fetchall()
@@ -152,8 +152,12 @@ def list_sessions_by_topic(topic: str, *, user_id: str, limit: int = 50) -> list
     for r in rows:
         results.append({
             "session_id": r["session_id"],
+            "mode": r["mode"],
+            "topic": r["topic"],
             "review": r["review"],
             "scores": json.loads(r["scores"]) if r["scores"] else [],
+            "weak_points": json.loads(r["weak_points"]) if r["weak_points"] else [],
+            "overall": json.loads(r["overall"] or "{}"),
             "created_at": r["created_at"],
         })
     return results
