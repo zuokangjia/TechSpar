@@ -213,7 +213,7 @@ def _analyze_recording_background(session_id: str, req_transcript: str, req_reco
 
         if req_recording_mode == "dual":
             # Structure transcript into Q&A
-            structure_prompt = RECORDING_STRUCTURE_PROMPT.format(transcript=req_transcript[:8000])
+            structure_prompt = RECORDING_STRUCTURE_PROMPT.format(transcript=req_transcript)
             response = llm.invoke([
                 SystemMessage(content="你是面试记录分析引擎。只返回 JSON，不要其他内容。"),
                 HumanMessage(content=structure_prompt),
@@ -247,7 +247,7 @@ def _analyze_recording_background(session_id: str, req_transcript: str, req_reco
             save_review(session_id, review, scores, overall.get("new_weak_points", []), overall, user_id=user_id)
         else:
             # Solo mode
-            eval_prompt = RECORDING_SOLO_EVAL_PROMPT.format(transcript=req_transcript[:8000])
+            eval_prompt = RECORDING_SOLO_EVAL_PROMPT.format(transcript=req_transcript)
             response = llm.invoke([
                 SystemMessage(content="你是录音评估引擎。只返回 JSON，不要其他内容。"),
                 HumanMessage(content=eval_prompt),
