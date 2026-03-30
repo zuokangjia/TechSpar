@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertTriangle, CalendarDays, ChevronRight, Filter, Hash, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
-import { getHistory, deleteSession, getInterviewTopics, backfillProfile } from "../api/interview";
+import { getHistory, deleteSession, getInterviewTopics, backfillProfile, precheckBackfillProfile } from "../api/interview";
 import { useTaskStatus } from "../contexts/TaskStatusContext";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,8 @@ export default function History() {
   const [backfillMode, setBackfillMode] = useState("all");
   const [backfillLimit, setBackfillLimit] = useState("");
   const [isBackfilling, setIsBackfilling] = useState(false);
+  const [isPrechecking, setIsPrechecking] = useState(false);
+  const [precheckResult, setPrecheckResult] = useState(null);
   const hasLoadedOnceRef = useRef(false);
   const requestIdRef = useRef(0);
 
@@ -138,6 +140,24 @@ export default function History() {
       alert("回灌失败: " + error.message);
     } finally {
       setIsBackfilling(false);
+    }
+  };
+
+  const handlePrecheck = async () => {
+    if (isPrechecking) return;
+    setIsPrechecking(true);
+    try {
+      const payload = {};
+      if (backfillMode !== "all") payload.mode = backfillMode;
+      const parsedLimit = Number.parseInt(backfillLimit, 10);
+      if (Number.isFinite(parsedLimit) && parsedLimit > 0) payload.limit = parsedLimit;
+
+      const result = await precheckBackfillProfile(payload);
+      setPrecheckResult(result);
+    } catch (error) {
+      alert("预验失败: " + error.message);
+    } finally {
+      setIsPrechecking(false);
     }
   };
 
@@ -306,15 +326,33 @@ export default function History() {
                 <div className="text-xs text-dim">
                   关闭重建会在当前画像基础上补充；开启重建会先清空再按历史重放。
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBackfill}
-                  disabled={isBackfilling}
-                >
-                  {isBackfilling ? "提交中..." : "开始回灌"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePrecheck}
+                    disabled={isPrechecking}
+                  >
+                    {isPrechecking ? "预验中..." : "先预验"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBackfill}
+                    disabled={isBackfilling}
+                  >
+                    {isBackfilling ? "提交中..." : "开始回灌"}
+                  </Button>
+                </div>
               </div>
+
+              {precheckResult && (
+                <div className="mt-3 rounded-2xl border border-border/80 bg-background/80 px-3 py-2.5 text-xs text-dim">
+                  <span className="mr-3">候选: <span className="font-semibold text-text">{precheckResult.total_candidates ?? 0}</span></span>
+                  <span className="mr-3">可回灌: <span className="font-semibold text-emerald-500">{precheckResult.valid ?? 0}</span></span>
+                  <span>需修复: <span className="font-semibold text-amber-500">{precheckResult.invalid ?? 0}</span></span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

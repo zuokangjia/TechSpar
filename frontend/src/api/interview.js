@@ -246,6 +246,16 @@ export async function backfillProfile(payload = {}) {
   return res.json();
 }
 
+export async function precheckBackfillProfile(payload = {}) {
+  const res = await authFetch(`${API_BASE}/profile/backfill/precheck`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 // ── Knowledge management ──
 
 export async function getCoreKnowledge(topic) {

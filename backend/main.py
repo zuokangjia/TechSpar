@@ -572,15 +572,35 @@ def _backfill_profile_background(task_id: str, user_id: str, rebuild: bool, limi
 
         processed = 0
         skipped = 0
+        invalid_skipped = 0
         failed = 0
+        failed_details = []
+        processed_by_mode = {
+            InterviewMode.RESUME.value: 0,
+            InterviewMode.TOPIC_DRILL.value: 0,
+            InterviewMode.JD_PREP.value: 0,
+            InterviewMode.RECORDING.value: 0,
+        }
+        llm_calls_resume_extract = 0
+        llm_calls_direct_profile_update = 0
+        llm_calls_resume_profile_update_max = 0
 
         for s in sessions:
+            session_id = s.get("session_id")
             s_mode = (s.get("mode") or "").strip()
             topic = s.get("topic")
             transcript = s.get("transcript") or []
             scores = s.get("scores") or []
             weak_points = s.get("weak_points") or []
             overall = s.get("overall") or {}
+
+            validation_errors = _validate_backfill_session_payload(s)
+            if validation_errors:
+                invalid_skipped += 1
+                logger.warning(
+                    f"Backfill skip invalid session user={user_id} session={session_id}: {validation_errors}"
+                )
+                continue
 
             # Skip sessions with no useful signal.
             if not transcript and not overall and not scores:
@@ -604,6 +624,9 @@ def _backfill_profile_background(task_id: str, user_id: str, rebuild: bool, limi
                         skipped += 1
                         continue
 
+                    llm_calls_resume_extract += 1
+                    llm_calls_resume_profile_update_max += 1
+
                     asyncio.run(update_profile_after_interview(
                         mode=InterviewMode.RESUME.value,
                         topic=topic,
@@ -612,25 +635,76 @@ def _backfill_profile_background(task_id: str, user_id: str, rebuild: bool, limi
                         scores=scores,
                     ))
                 else:
-                    valid_scores = [x for x in scores if isinstance(x.get("score"), (int, float))]
+                    # Defensive normalization for historical payloads.
+                    def _as_dict(v):
+                        if isinstance(v, dict):
+                            return v
+                        if isinstance(v, str):
+                            try:
+                                parsed = json.loads(v)
+                                return parsed if isinstance(parsed, dict) else {}
+                            except Exception:
+                                return {}
+                        return {}
+
+                    def _as_list(v):
+                        if isinstance(v, list):
+                            return v
+                        if isinstance(v, str):
+                            try:
+                                parsed = json.loads(v)
+                                return parsed if isinstance(parsed, list) else []
+                            except Exception:
+                                return []
+                        return []
+
+                    normalized_weak_points = _as_list(overall.get("new_weak_points", weak_points))
+                    normalized_strong_points = _as_list(overall.get("new_strong_points", []))
+                    normalized_topic_mastery = _as_dict(overall.get("topic_mastery", {}))
+                    normalized_communication = _as_dict(overall.get("communication_observations", {}))
+                    normalized_thinking = _as_dict(overall.get("thinking_patterns"))
+                    normalized_dimension_scores = _as_dict(overall.get("dimension_scores"))
+
+                    raw_avg_score = overall.get("avg_score")
+                    try:
+                        normalized_avg_score = float(raw_avg_score) if raw_avg_score is not None else None
+                    except (TypeError, ValueError):
+                        normalized_avg_score = None
+
+                    # llm_update_profile only invokes LLM when new facts exist.
+                    if normalized_weak_points or normalized_strong_points:
+                        llm_calls_direct_profile_update += 1
+
+                    valid_scores = [x for x in scores if isinstance(x, dict) and isinstance(x.get("score"), (int, float))]
                     asyncio.run(llm_update_profile(
                         mode=s_mode,
                         topic=topic,
-                        new_weak_points=overall.get("new_weak_points", weak_points),
-                        new_strong_points=overall.get("new_strong_points", []),
-                        topic_mastery=overall.get("topic_mastery", {}),
-                        communication=overall.get("communication_observations", {}),
+                        new_weak_points=normalized_weak_points,
+                        new_strong_points=normalized_strong_points,
+                        topic_mastery=normalized_topic_mastery,
+                        communication=normalized_communication,
                         user_id=user_id,
-                        thinking_patterns=overall.get("thinking_patterns"),
+                        thinking_patterns=normalized_thinking,
                         session_summary=overall.get("summary", ""),
-                        avg_score=overall.get("avg_score"),
+                        avg_score=normalized_avg_score,
                         answer_count=len(valid_scores),
-                        dimension_scores=overall.get("dimension_scores"),
+                        dimension_scores=normalized_dimension_scores,
                     ))
 
                 processed += 1
-            except Exception:
+                if s_mode in processed_by_mode:
+                    processed_by_mode[s_mode] += 1
+            except Exception as e:
                 failed += 1
+                err = str(e)
+                failed_details.append({
+                    "session_id": session_id,
+                    "mode": s_mode,
+                    "error": err[:300],
+                })
+                logger.warning(
+                    f"Backfill session failed user={user_id} session={session_id} mode={s_mode}: {err}"
+                )
 
         # Keep vector memory and profile weak-point vectors aligned after replay.
         rebuild_index_from_profile(user_id)
@@ -644,13 +718,95 @@ def _backfill_profile_background(task_id: str, user_id: str, rebuild: bool, limi
                 "total_candidates": len(sessions),
                 "processed": processed,
                 "skipped": skipped,
+                "invalid_skipped": invalid_skipped,
                 "failed": failed,
+                "failed_details": failed_details[:20],
+                "processed_by_mode": processed_by_mode,
+                "llm_stats": {
+                    "resume_extract_calls": llm_calls_resume_extract,
+                    "direct_profile_update_calls": llm_calls_direct_profile_update,
+                    "resume_profile_update_calls_estimated": {
+                        "min": 0,
+                        "max": llm_calls_resume_profile_update_max,
+                    },
+                    "total_calls_estimated": {
+                        "min": llm_calls_resume_extract + llm_calls_direct_profile_update,
+                        "max": llm_calls_resume_extract + llm_calls_direct_profile_update + llm_calls_resume_profile_update_max,
+                    },
+                },
+                "embedding_stats": {
+                    "profile_rebuild_index_invoked": True,
+                },
             },
         }
-        logger.info(f"Profile backfill finished for user={user_id}: processed={processed}, failed={failed}")
+        logger.info(
+            f"Profile backfill finished for user={user_id}: processed={processed}, "
+            f"skipped={skipped}, invalid_skipped={invalid_skipped}, failed={failed}"
+        )
     except Exception as e:
         _task_status[task_id] = {"status": "error", "type": "profile_backfill"}
         logger.error(f"Profile backfill failed for user={user_id}: {e}")
+
+
+def _validate_backfill_session_payload(session: dict) -> list[str]:
+    """Pure structural validation for a reviewed session (no LLM/embedding calls)."""
+    errors: list[str] = []
+
+    mode = (session.get("mode") or "").strip()
+    valid_modes = {
+        InterviewMode.RESUME.value,
+        InterviewMode.TOPIC_DRILL.value,
+        InterviewMode.JD_PREP.value,
+        InterviewMode.RECORDING.value,
+    }
+    if mode not in valid_modes:
+        errors.append(f"invalid mode: {mode or 'empty'}")
+
+    transcript = session.get("transcript")
+    scores = session.get("scores")
+    overall = session.get("overall")
+    weak_points = session.get("weak_points")
+
+    if not isinstance(transcript, list):
+        errors.append("transcript must be a list")
+    if not isinstance(scores, list):
+        errors.append("scores must be a list")
+    if not isinstance(overall, dict):
+        errors.append("overall must be an object")
+    if not isinstance(weak_points, list):
+        errors.append("weak_points must be a list")
+
+    if isinstance(scores, list):
+        for i, item in enumerate(scores):
+            if not isinstance(item, dict):
+                errors.append(f"scores[{i}] must be an object")
+                continue
+            if "score" in item and item.get("score") is not None and not isinstance(item.get("score"), (int, float)):
+                errors.append(f"scores[{i}].score must be number or null")
+
+    if mode == InterviewMode.RESUME.value and isinstance(transcript, list):
+        has_usable_message = False
+        for i, item in enumerate(transcript):
+            if not isinstance(item, dict):
+                errors.append(f"transcript[{i}] must be an object")
+                continue
+            role = item.get("role")
+            content = item.get("content")
+            if role in ("user", "assistant") and isinstance(content, str) and content.strip():
+                has_usable_message = True
+        if not has_usable_message:
+            errors.append("resume session has no usable user/assistant transcript content")
+    elif (
+        isinstance(transcript, list)
+        and isinstance(scores, list)
+        and isinstance(overall, dict)
+        and not transcript
+        and not scores
+        and not overall
+    ):
+        errors.append("empty transcript/scores/overall")
+
+    return errors
 
 
 @router.post("/profile/topic/{topic}/retrospective")
@@ -732,10 +888,92 @@ async def backfill_profile(
     if mode is not None and mode not in valid_modes:
         raise HTTPException(400, f"Invalid mode. Available: {sorted(valid_modes)}")
 
+    # Deduplicate: if this user already has a running backfill task, reuse it.
+    for existing_task_id, task in _task_status.items():
+        if (
+            task.get("type") == "profile_backfill"
+            and task.get("status") == "pending"
+            and task.get("user_id") == user_id
+        ):
+            return {
+                "task_id": existing_task_id,
+                "status": "pending",
+                "type": "profile_backfill",
+                "deduplicated": True,
+            }
+
     task_id = f"backfill_{user_id}_{uuid.uuid4().hex[:8]}"
-    _task_status[task_id] = {"status": "pending", "type": "profile_backfill"}
+    _task_status[task_id] = {
+        "status": "pending",
+        "type": "profile_backfill",
+        "user_id": user_id,
+    }
     background_tasks.add_task(_backfill_profile_background, task_id, user_id, rebuild, limit, mode)
     return {"task_id": task_id, "status": "pending", "type": "profile_backfill"}
+
+
+@router.post("/profile/backfill/precheck")
+async def precheck_backfill_profile(
+    body: dict | None = None,
+    user_id: str = Depends(get_current_user),
+):
+    """Validate reviewed sessions for backfill readiness without LLM/embedding calls.
+
+    body:
+      - limit: int | null, optional max sessions to scan (oldest first)
+      - mode: str | null, optional one of resume/topic_drill/jd_prep/recording
+      - include_valid_samples: bool, optional, default false
+    """
+    body = body or {}
+    limit = body.get("limit")
+    mode = body.get("mode")
+    include_valid_samples = bool(body.get("include_valid_samples", False))
+
+    if limit is not None:
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "limit must be an integer")
+        if limit <= 0:
+            raise HTTPException(400, "limit must be > 0")
+
+    valid_modes = {InterviewMode.RESUME.value, InterviewMode.TOPIC_DRILL.value, InterviewMode.JD_PREP.value, InterviewMode.RECORDING.value}
+    if mode is not None and mode not in valid_modes:
+        raise HTTPException(400, f"Invalid mode. Available: {sorted(valid_modes)}")
+
+    sessions = list_reviewed_sessions_detailed(user_id=user_id, limit=limit, mode=mode)
+
+    invalid = []
+    valid_count = 0
+    valid_samples = []
+    for s in sessions:
+        errs = _validate_backfill_session_payload(s)
+        if errs:
+            invalid.append({
+                "session_id": s.get("session_id"),
+                "mode": s.get("mode"),
+                "created_at": s.get("created_at"),
+                "errors": errs,
+            })
+        else:
+            valid_count += 1
+            if include_valid_samples and len(valid_samples) < 20:
+                valid_samples.append({
+                    "session_id": s.get("session_id"),
+                    "mode": s.get("mode"),
+                    "created_at": s.get("created_at"),
+                })
+
+    result = {
+        "mode": mode,
+        "total_candidates": len(sessions),
+        "valid": valid_count,
+        "invalid": len(invalid),
+        "invalid_details": invalid[:50],
+    }
+    if include_valid_samples:
+        result["valid_samples"] = valid_samples
+    return result
 
 
 # ── Interview ──
