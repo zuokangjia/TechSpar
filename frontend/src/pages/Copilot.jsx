@@ -784,6 +784,22 @@ function CopilotPanel({ update, riskAlert }) {
         </div>
       </div>
 
+      {update?.prediction_accuracy && (
+        <div className={cn(
+          "flex items-center gap-2 text-xs px-3 py-1.5 rounded-xl",
+          update.prediction_accuracy.was_hit
+            ? "bg-green/10 text-green"
+            : "bg-amber-500/10 text-amber-400"
+        )}>
+          {update.prediction_accuracy.was_hit ? <CheckCircle2 size={12} /> : <Target size={12} />}
+          <span>
+            {update.prediction_accuracy.was_hit
+              ? "上轮预测命中"
+              : `上轮预测未命中 — 实际: ${update.prediction_accuracy.actual}`}
+          </span>
+        </div>
+      )}
+
       {predictions.length > 0 && (
         <div className="rounded-2xl border border-border/75 bg-card/75 p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/80 mb-3">追问预测</div>

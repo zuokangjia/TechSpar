@@ -1679,6 +1679,7 @@ async def _init_copilot_session(ws: WebSocket, prep_id: str, session_id: str) ->
         "navigator": navigator,
         "prep": prep_result,
         "conversation": [],
+        "last_predictions": None,
     }
 
 
@@ -1699,15 +1700,55 @@ async def _process_hr_utterance(ws: WebSocket, session: dict, text: str):
     node_id = intent_result.get("node_id")
     intent = intent_result.get("intent", "unknown")
 
+    # Step 1.5: 对比上轮预测 vs 本轮实际，构建纠偏上下文
+    correction_context = None
+    last_preds = session.get("last_predictions")
+    if last_preds and last_preds["predictions"]:
+        predicted_node_ids = [p["node_id"] for p in last_preds["predictions"]]
+        predicted_directions = [p["direction"] for p in last_preds["predictions"]]
+        hit = False
+        hit_direction = None
+        # 精确 node_id 匹配
+        if node_id and node_id in predicted_node_ids:
+            hit = True
+            hit_direction = next(
+                (p["direction"] for p in last_preds["predictions"] if p["node_id"] == node_id), None
+            )
+        # 兜底: topic 子串匹配（适配 freeform 预测 node_id 为 null 的情况）
+        if not hit and node_id:
+            actual_node = navigator.get_node(node_id)
+            actual_topic = actual_node.get("topic", "") if actual_node else ""
+            if actual_topic:
+                for p in last_preds["predictions"]:
+                    if actual_topic in p["direction"] or p["direction"] in actual_topic:
+                        hit = True
+                        hit_direction = p["direction"]
+                        break
+        actual_node_info = navigator.get_node(node_id) if node_id else None
+        correction_context = {
+            "previous_utterance": last_preds["for_utterance"],
+            "predicted_directions": predicted_directions,
+            "actual_direction": actual_node_info.get("topic", text[:50]) if actual_node_info else text[:50],
+            "was_hit": hit,
+            "hit_direction": hit_direction,
+        }
+
     # Step 2: Predictor + Advisor 并行
     pred_task = asyncio.create_task(
-        predict_directions(navigator, node_id, conversation)
+        predict_directions(navigator, node_id, conversation, correction=correction_context)
     )
     advice_task = asyncio.create_task(
         advise_answer(text, node_id, navigator, prep)
     )
 
     predictions, advice = await asyncio.gather(pred_task, advice_task)
+
+    # 保存本轮预测，供下轮纠偏
+    session["last_predictions"] = {
+        "for_node_id": node_id,
+        "for_utterance": text,
+        "predictions": predictions,
+    }
 
     # 发送分析结果
     node = navigator.get_node(node_id) if node_id else None
@@ -1719,6 +1760,11 @@ async def _process_hr_utterance(ws: WebSocket, session: dict, text: str):
         "confidence": intent_result.get("confidence", 0),
         "predictions": predictions,
         "answer_hints": advice.get("hints", []),
+        "prediction_accuracy": {
+            "was_hit": correction_context["was_hit"],
+            "predicted": correction_context["predicted_directions"],
+            "actual": correction_context["actual_direction"],
+        } if correction_context else None,
     })
 
     # 风险警告单独发送（如果有）
