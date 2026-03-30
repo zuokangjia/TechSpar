@@ -1394,6 +1394,11 @@ async def start_copilot_prep(
     """启动 Copilot Prep Phase（后台异步执行）。"""
     prep_id = uuid.uuid4().hex[:12]
     _copilot_preps[prep_id] = {
+        "user_id": user_id,
+        "company": company,
+        "position": position,
+        "jd_text": jd_text[:200],  # 摘要用于列表展示
+        "created_at": datetime.now().isoformat(),
         "status": "running",
         "progress": "初始化中...",
         "error": "",
@@ -1423,6 +1428,37 @@ async def start_copilot_prep(
 
     background_tasks.add_task(_run_prep)
     return {"prep_id": prep_id}
+
+
+@router.get("/copilot/preps")
+async def list_copilot_preps(user_id: str = Depends(get_current_user)):
+    """列出当前用户的所有 Copilot Prep 会话。"""
+    items = []
+    for prep_id, data in _copilot_preps.items():
+        if data.get("user_id") != user_id:
+            continue
+        items.append({
+            "prep_id": prep_id,
+            "company": data.get("company", ""),
+            "position": data.get("position", ""),
+            "jd_excerpt": data.get("jd_text", "")[:80],
+            "status": data["status"],
+            "progress": data.get("progress", ""),
+            "created_at": data.get("created_at", ""),
+        })
+    # 按创建时间降序
+    items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return items
+
+
+@router.delete("/copilot/prep/{prep_id}")
+async def delete_copilot_prep(prep_id: str, user_id: str = Depends(get_current_user)):
+    """删除一个 Copilot Prep 会话。"""
+    data = _copilot_preps.get(prep_id)
+    if not data or data.get("user_id") != user_id:
+        raise HTTPException(404, "Prep session not found")
+    del _copilot_preps[prep_id]
+    return {"ok": True}
 
 
 @router.get("/copilot/prep/{prep_id}")

@@ -19,6 +19,20 @@ async function authFetch(url, options = {}) {
   return res;
 }
 
+/** 列出所有 Prep 会话 */
+export async function listCopilotPreps() {
+  const res = await authFetch(`${API_BASE}/copilot/preps`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/** 删除 Prep 会话 */
+export async function deleteCopilotPrep(prepId) {
+  const res = await authFetch(`${API_BASE}/copilot/prep/${prepId}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 /** 启动 Copilot Prep Phase */
 export async function startCopilotPrep({ jdText, company, position }) {
   const form = new FormData();
