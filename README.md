@@ -6,7 +6,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-Powered-1C3C3C.svg)](https://www.langchain.com/langgraph)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
 
 **从刷题到实战的 AI 技术面试训练系统。**
 
