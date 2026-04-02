@@ -1621,18 +1621,20 @@ async def copilot_realtime_ws(ws: WebSocket, session_id: str):
             msg_type = msg.get("type", "")
 
             if msg_type == "start":
-                session = await _init_copilot_session(
-                    ws, msg.get("prep_id", ""), session_id,
-                    prediction_agents=msg.get("prediction_agents"),
-                )
-                _copilot_sessions[session_id] = session
-                await ws.send_json({"type": "started", "session_id": session_id})
+                try:
+                    session = await _init_copilot_session(
+                        ws, msg.get("prep_id", ""), session_id,
+                    )
+                    _copilot_sessions[session_id] = session
+                    await ws.send_json({"type": "started", "session_id": session_id})
+                except Exception as init_err:
+                    logger.error(f"Copilot session init failed: {init_err}", exc_info=True)
+                    await ws.send_json({"type": "error", "message": f"初始化失败: {init_err}"})
 
             elif msg_type == "manual" and session:
-                # 手动输入 HR 发言（ASR 降级 / 补充）
+                # 手动输入 HR 发言
                 text = msg.get("text", "").strip()
                 if text:
-                    await ws.send_json({"type": "asr_final", "text": text})
                     await _process_hr_utterance(ws, session, text)
 
             elif msg_type == "stop":
@@ -1643,6 +1645,11 @@ async def copilot_realtime_ws(ws: WebSocket, session_id: str):
 
     except WebSocketDisconnect:
         logger.info(f"Copilot WS disconnected: {session_id}")
+    except RuntimeError as e:
+        if "disconnect" in str(e).lower():
+            logger.info(f"Copilot WS disconnected: {session_id}")
+        else:
+            logger.error(f"Copilot WS runtime error: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Copilot WS error: {e}", exc_info=True)
         try:
@@ -1657,12 +1664,11 @@ async def copilot_realtime_ws(ws: WebSocket, session_id: str):
 
 async def _init_copilot_session(
     ws: WebSocket, prep_id: str, session_id: str,
-    prediction_agents: list[str] | None = None,
 ) -> dict:
     """初始化 Copilot 实时会话。"""
     from backend.copilot.strategy_tree import StrategyTreeNavigator
 
-    prep_data = _copilot_preps.get(prep_id)
+    prep_data = prep_store.get_prep_by_id(prep_id)
     if not prep_data or prep_data["status"] != "done" or not prep_data.get("result"):
         raise ValueError("Prep session not ready")
 
@@ -1717,116 +1723,62 @@ async def _init_copilot_session(
         "navigator": navigator,
         "prep": prep_result,
         "conversation": [],
-        "last_predictions": None,
-        "prediction_agents": prediction_agents,
     }
 
 
-def _cosine_sim(a: list[float], b: list[float]) -> float:
-    import numpy as np
-    va, vb = np.array(a, dtype=np.float32), np.array(b, dtype=np.float32)
-    denom = np.linalg.norm(va) * np.linalg.norm(vb)
-    return float(np.dot(va, vb) / denom) if denom > 0 else 0.0
-
-
-async def _embed_predictions(predictions: list[dict]):
-    """后台计算每个 prediction direction 的 embedding，写入 dict 供下轮 correction 使用。"""
-    from backend.llm_provider import get_embedding
-    loop = asyncio.get_event_loop()
-    embed_model = get_embedding()
-    for pred in predictions:
-        try:
-            pred["direction_embedding"] = await loop.run_in_executor(
-                None, embed_model.get_text_embedding, pred["direction"]
-            )
-        except Exception:
-            pred["direction_embedding"] = None
-
 
 async def _process_hr_utterance(ws: WebSocket, session: dict, text: str):
-    """处理 HR 的一句话：意图分类 → 追问预测 + 回答建议（并行）。"""
+    """处理 HR 的一句话：意图分类 → 策略树查表 + 回答建议。"""
     from backend.copilot.intent_classifier import classify_intent
-    from backend.copilot.direction_predictor import predict_directions
     from backend.copilot.answer_advisor import advise_answer
 
     navigator = session.get("navigator")
     prep = session.get("prep", {})
     conversation = session.get("conversation", [])
-    prediction_agents = session.get("prediction_agents")
 
     conversation.append({"role": "hr", "text": text})
 
-    # Step 1: Intent Classification (<200ms)
+    # Step 1: Intent Classification — 定位策略树节点 (<200ms)
     intent_result = await classify_intent(text, navigator)
     node_id = intent_result.get("node_id")
     intent = intent_result.get("intent", "unknown")
 
-    # Step 1.5: 对比上轮预测 vs 本轮实际，构建 per-agent 纠偏上下文
-    per_agent_corrections = None
-    any_hit = False
-    last_preds = session.get("last_predictions")
-    if last_preds and last_preds["predictions"]:
-        utt_emb = intent_result.get("utterance_embedding")
-        actual_node_info = navigator.get_node(node_id) if node_id else None
-        actual_direction = actual_node_info.get("topic", text[:50]) if actual_node_info else text[:50]
-        previous_utterance = last_preds["for_utterance"]
+    # Step 2: 策略树查表 — 瞬间出稿子（回答要点 + 追问方向 + 引导建议）
+    node = navigator.get_node(node_id) if node_id else None
+    children_list = []
+    recommended_points = []
+    prep_hint = None
+    if node:
+        children = navigator.get_children(node_id)
+        children_list = [
+            {"topic": c.get("topic", ""), "question": (c.get("sample_questions") or [""])[0]}
+            for c in children
+        ]
+        recommended_points = node.get("recommended_points", [])
+        # 查找对应的 prep_hint
+        for hint in prep.get("prep_hints", []):
+            if hint.get("node_id") == node_id:
+                prep_hint = hint
+                break
 
-        per_agent_corrections = {}
-        for p in last_preds["predictions"]:
-            agent_id = p.get("agent_id", "unknown")
-            was_hit = False
-
-            # 主路径：embedding 相似度（覆盖 freeform agent）
-            dir_emb = p.get("direction_embedding")
-            if utt_emb and dir_emb:
-                was_hit = _cosine_sim(utt_emb, dir_emb) >= 0.5
-            # 降级：node_id 精确匹配
-            elif not was_hit and node_id and p.get("node_id") == node_id:
-                was_hit = True
-
-            if was_hit:
-                any_hit = True
-
-            per_agent_corrections[agent_id] = {
-                "previous_utterance": previous_utterance,
-                "predicted_direction": p["direction"],
-                "actual_direction": actual_direction,
-                "was_hit": was_hit,
-            }
-
-    # Step 2: Predictor + Advisor 并行
-    pred_task = asyncio.create_task(
-        predict_directions(navigator, node_id, conversation, enabled_agents=prediction_agents, per_agent_corrections=per_agent_corrections)
-    )
-    advice_task = asyncio.create_task(
-        advise_answer(text, node_id, navigator, prep)
-    )
-
-    predictions, advice = await asyncio.gather(pred_task, advice_task)
-
-    # 保存本轮预测，供下轮纠偏；异步计算 direction embedding 供命中判断用
-    session["last_predictions"] = {
-        "for_node_id": node_id,
-        "for_utterance": text,
-        "predictions": predictions,
-    }
-    asyncio.create_task(_embed_predictions(predictions))
+    # Step 3: Answer Advisor — 针对 HR 具体问法生成答案 (1次LLM, ~1s)
+    advice = await advise_answer(text, node_id, navigator, prep)
 
     # 发送分析结果
-    node = navigator.get_node(node_id) if node_id else None
     await ws.send_json({
         "type": "copilot_update",
         "intent": intent,
         "tree_position": node_id,
         "topic": node.get("topic", "") if node else "",
         "confidence": intent_result.get("confidence", 0),
-        "predictions": predictions,
+        "recommended_points": recommended_points,
+        "children": children_list,
+        "prep_hint": {
+            "safe_talking_points": prep_hint.get("safe_talking_points", []),
+            "redirect_suggestion": prep_hint.get("redirect_suggestion", ""),
+        } if prep_hint else None,
         "answer_framework": advice.get("framework", []),
         "answer_full": advice.get("full_answer", ""),
-        "prediction_accuracy": {
-            "any_hit": any_hit,
-            "per_agent": per_agent_corrections,
-        } if per_agent_corrections else None,
     })
 
     # 风险警告单独发送（如果有）

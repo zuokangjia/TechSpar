@@ -12,7 +12,7 @@ import {
   getCopilotPrepStatus,
   deleteCopilotPrep,
 } from "../api/copilot";
-import { getResumeStatus, getProfile, getSettings } from "../api/interview";
+import { getResumeStatus, getProfile } from "../api/interview";
 import useCopilotStream from "../hooks/useCopilotStream";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -685,17 +685,7 @@ function RealtimePhase({ prepId, onBack }) {
   const [riskAlert, setRiskAlert] = useState(null);
   const [progressMsg, setProgressMsg] = useState("连接中...");
   const [started, setStarted] = useState(false);
-  const [predictionAgents, setPredictionAgents] = useState(["tech_deep", "pressure", "project_shift"]);
   const chatEndRef = useRef(null);
-
-  useEffect(() => {
-    getSettings()
-      .then((data) => {
-        const agents = data.training?.prediction_agents;
-        if (Array.isArray(agents) && agents.length > 0) setPredictionAgents(agents);
-      })
-      .catch(() => {});
-  }, []);
 
   const handleUpdate = useCallback((msg) => {
     switch (msg.type) {
@@ -710,7 +700,7 @@ function RealtimePhase({ prepId, onBack }) {
   const {
     connected, listening, asrText, lastFinal,
     connect, startListening, stopListening, sendManualText, disconnect,
-  } = useCopilotStream({ prepId, predictionAgents, onUpdate: handleUpdate });
+  } = useCopilotStream({ prepId, onUpdate: handleUpdate });
 
   useEffect(() => { connect(sessionId); }, [connect, sessionId]);
 
@@ -816,11 +806,11 @@ function RealtimePhase({ prepId, onBack }) {
 }
 
 function CopilotPanel({ update, riskAlert }) {
-  const predictions = update?.predictions || [];
+  const recommendedPoints = update?.recommended_points || [];
+  const children = update?.children || [];
+  const prepHint = update?.prep_hint;
   const framework = update?.answer_framework || [];
   const fullAnswer = update?.answer_full || "";
-  const accuracy = update?.prediction_accuracy;
-  const perAgent = accuracy?.per_agent || {};
 
   return (
     <div className="p-4 space-y-4">
@@ -836,54 +826,30 @@ function CopilotPanel({ update, riskAlert }) {
         </div>
       </div>
 
-      {/* 上轮命中状态 */}
-      {accuracy && (
-        <div className={cn(
-          "flex items-center gap-2 text-xs px-3 py-1.5 rounded-xl",
-          accuracy.any_hit ? "bg-green/10 text-green" : "bg-amber-500/10 text-amber-400"
-        )}>
-          {accuracy.any_hit ? <CheckCircle2 size={12} /> : <Target size={12} />}
-          <span>{accuracy.any_hit ? "上轮预测命中" : "上轮预测未命中"}</span>
-          {!accuracy.any_hit && Object.values(perAgent)[0]?.actual_direction && (
-            <span className="ml-1 opacity-70">— 实际: {Object.values(perAgent)[0].actual_direction}</span>
+      {/* 回答要点 — 策略树预计算，瞬间出现 */}
+      {recommendedPoints.length > 0 && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary/80 mb-3">回答要点</div>
+          <ul className="space-y-1.5">
+            {recommendedPoints.map((point, i) => (
+              <li key={i} className="text-sm leading-6 flex items-start gap-2">
+                <span className="text-primary/50 mt-1.5 shrink-0">•</span>
+                {point}
+              </li>
+            ))}
+          </ul>
+          {prepHint?.redirect_suggestion && (
+            <div className="mt-3 pt-3 border-t border-primary/10 text-[12px] text-primary/70 leading-5">
+              <span className="font-semibold">引导方向：</span>{prepHint.redirect_suggestion}
+            </div>
           )}
         </div>
       )}
 
-      {/* 追问预测 */}
-      {predictions.length > 0 && (
-        <div className="rounded-2xl border border-border/75 bg-card/75 p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/80 mb-3">追问预测</div>
-          <div className="space-y-2.5">
-            {predictions.map((p) => {
-              const agentCorrection = perAgent[p.agent_id];
-              const wasHit = agentCorrection?.was_hit;
-              return (
-                <div key={p.agent_id} className={cn(
-                  "rounded-xl border px-3 py-2.5 text-sm",
-                  wasHit === true ? "border-green/20 bg-green/5"
-                  : wasHit === false ? "border-border/40 bg-background/40"
-                  : "border-border/60 bg-background/60"
-                )}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary/70">{p.name}</span>
-                    {wasHit === true && <CheckCircle2 size={11} className="text-green" />}
-                  </div>
-                  <div className="font-medium">{p.direction}</div>
-                  {p.example_question && (
-                    <div className="mt-1 text-[12px] text-dim leading-5">"{p.example_question}"</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 回答建议 */}
+      {/* 参考答案 — Answer Advisor LLM 生成，~1s 后出现 */}
       {(framework.length > 0 || fullAnswer) && (
         <div className="rounded-2xl border border-green/20 bg-green/5 p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-green/80 mb-3">回答建议</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-green/80 mb-3">参考答案</div>
           {framework.length > 0 && (
             <ol className="space-y-1.5 mb-3">
               {framework.map((step, i) => (
@@ -900,6 +866,23 @@ function CopilotPanel({ update, riskAlert }) {
               <p className="text-sm leading-7 text-text/85">{fullAnswer}</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 可能追问 — 策略树 children，瞬间出现 */}
+      {children.length > 0 && (
+        <div className="rounded-2xl border border-border/75 bg-card/75 p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/80 mb-3">可能追问</div>
+          <div className="space-y-2.5">
+            {children.map((c, i) => (
+              <div key={i} className="rounded-xl border border-border/60 bg-background/60 px-3 py-2.5 text-sm">
+                <div className="font-medium">{c.topic}</div>
+                {c.question && (
+                  <div className="mt-1 text-[12px] text-dim leading-5">"{c.question}"</div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

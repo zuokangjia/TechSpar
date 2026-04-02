@@ -8,7 +8,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
  * 2. 采集麦克风音频并转为 PCM 推流
  * 3. 接收 ASR 结果和 Agent 分析结果
  */
-export default function useCopilotStream({ prepId, predictionAgents, onUpdate } = {}) {
+export default function useCopilotStream({ prepId, onUpdate } = {}) {
   const [connected, setConnected] = useState(false);
   const [listening, setListening] = useState(false);
   const [asrText, setAsrText] = useState("");       // 中间结果（实时字幕）
@@ -24,19 +24,20 @@ export default function useCopilotStream({ prepId, predictionAgents, onUpdate } 
 
   /** 建立 WebSocket 连接 */
   const connect = useCallback((sessionId) => {
-    if (wsRef.current) return;
+    if (wsRef.current && wsRef.current.readyState <= WebSocket.OPEN) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws/copilot/${sessionId}`);
 
     ws.onopen = () => {
       setConnected(true);
-      ws.send(JSON.stringify({ type: "start", prep_id: prepId, prediction_agents: predictionAgents }));
+      ws.send(JSON.stringify({ type: "start", prep_id: prepId }));
     };
 
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
+        console.log("[Copilot WS]", msg.type, msg);
         switch (msg.type) {
           case "asr_interim":
             setAsrText(msg.text || "");
@@ -58,12 +59,17 @@ export default function useCopilotStream({ prepId, predictionAgents, onUpdate } 
     };
 
     ws.onclose = () => {
-      setConnected(false);
-      wsRef.current = null;
+      // 只有当前活跃的 WS 关闭才更新状态，避免 Strict Mode 竞态
+      if (wsRef.current === ws) {
+        setConnected(false);
+        wsRef.current = null;
+      }
     };
 
     ws.onerror = () => {
-      setConnected(false);
+      if (wsRef.current === ws) {
+        setConnected(false);
+      }
     };
 
     wsRef.current = ws;
