@@ -402,33 +402,19 @@ function DomainZoneColumn({ zone, items, onSelect }) {
   );
 }
 
-function PatternList({ title, icon, items, accentClassName, emptyText }) {
+function PatternColumn({ title, color, items }) {
+  if (items.length === 0) return null;
   return (
     <div>
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        {icon}
-        {title}
-      </div>
-      <div className="mt-3">
-        {items.length > 0 ? (
-          <CollapsibleList
-            items={items}
-            limit={4}
-            renderItem={(item, index) => (
-              <div
-                key={`${item}-${index}`}
-                className={cn("rounded-xl px-3 py-2 text-sm leading-6", accentClassName)}
-              >
-                {item}
-              </div>
-            )}
-          />
-        ) : (
-          <div className="rounded-xl border border-dashed border-border/80 px-3 py-4 text-sm text-dim">
-            {emptyText}
-          </div>
-        )}
-      </div>
+      <div className={cn("text-xs font-semibold uppercase tracking-wide mb-2", color)}>{title}</div>
+      <ul className="space-y-1.5">
+        {items.map((item, i) => (
+          <li key={`${item}-${i}`} className="flex items-start gap-2 text-sm leading-6 text-dim">
+            <span className={cn("mt-2 h-1.5 w-1.5 rounded-full shrink-0", color.replace("text-", "bg-"))} />
+            {item}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -921,52 +907,27 @@ export default function Profile() {
         <SectionHeader
           icon={<Brain size={18} />}
           title="答题模式"
-          caption="这里是模式层解释，不再拆成四张一级卡片和前面的诊断抢权重。"
+          caption="模式层解释，不再拆成四张一级卡片和前面的诊断抢权重。"
         />
 
-        <div className="mt-5 rounded-[24px] border border-border/80 bg-black/[0.02] p-5 dark:bg-white/[0.02]">
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <MessageSquare size={16} className="text-primary" />
-            表达特征
-          </div>
-          <div className="mt-3 text-sm leading-7 text-dim">
-            {profile.communication?.style || "暂时没有形成明确的表达侧总结。"}
-          </div>
-          <div className="mt-4">
+        {/* 表达特征 */}
+        <div className="mt-5 text-sm leading-7 text-dim">
+          {profile.communication?.style || "暂时没有形成明确的表达侧总结。"}
+        </div>
+        {communicationHabits.length > 0 && (
+          <div className="mt-3">
             <HabitTagList items={communicationHabits} />
           </div>
-        </div>
+        )}
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-2">
-          <div className="rounded-[24px] border border-red/15 bg-red/6 p-5 dark:bg-red/8">
-            <PatternList
-              title="高频风险"
-              icon={<TriangleAlert size={16} className="text-red" />}
-              items={thinkingGaps}
-              accentClassName="bg-card/90 border-l-[3px] border-l-red"
-              emptyText="还没有记录到明确的思维短板。"
-            />
+        {/* 三栏紧凑列表 */}
+        {(thinkingGaps.length > 0 || thinkingStrengths.length > 0 || communicationSuggestions.length > 0) && (
+          <div className="mt-5 grid gap-x-6 gap-y-4 md:grid-cols-3">
+            <PatternColumn title="风险" color="text-red" items={thinkingGaps} />
+            <PatternColumn title="优势" color="text-green" items={thinkingStrengths} />
+            <PatternColumn title="训练" color="text-primary" items={communicationSuggestions} />
           </div>
-          <div className="rounded-[24px] border border-green/15 bg-green/6 p-5 dark:bg-green/8">
-            <PatternList
-              title="可放大优势"
-              icon={<Brain size={16} className="text-green" />}
-              items={thinkingStrengths}
-              accentClassName="bg-card/90 border-l-[3px] border-l-green"
-              emptyText="还没有记录到明显的思维优势。"
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 rounded-[24px] border border-primary/15 bg-primary/6 p-5 dark:bg-primary/8">
-          <PatternList
-            title="训练动作"
-            icon={<Sparkles size={16} className="text-primary" />}
-            items={communicationSuggestions}
-            accentClassName="bg-card/90 border-l-[3px] border-l-primary"
-            emptyText="暂时没有新的训练建议。"
-          />
-        </div>
+        )}
       </CardContent>
     </Card>
   );
