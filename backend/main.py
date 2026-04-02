@@ -1777,7 +1777,6 @@ async def _process_hr_utterance(ws: WebSocket, session: dict, text: str):
             "safe_talking_points": prep_hint.get("safe_talking_points", []),
             "redirect_suggestion": prep_hint.get("redirect_suggestion", ""),
         } if prep_hint else None,
-        "answer_framework": advice.get("framework", []),
         "answer_full": advice.get("full_answer", ""),
     })
 

@@ -809,7 +809,6 @@ function CopilotPanel({ update, riskAlert }) {
   const recommendedPoints = update?.recommended_points || [];
   const children = update?.children || [];
   const prepHint = update?.prep_hint;
-  const framework = update?.answer_framework || [];
   const fullAnswer = update?.answer_full || "";
 
   return (
@@ -847,25 +846,10 @@ function CopilotPanel({ update, riskAlert }) {
       )}
 
       {/* 参考答案 — Answer Advisor LLM 生成，~1s 后出现 */}
-      {(framework.length > 0 || fullAnswer) && (
+      {fullAnswer && (
         <div className="rounded-2xl border border-green/20 bg-green/5 p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-green/80 mb-3">参考答案</div>
-          {framework.length > 0 && (
-            <ol className="space-y-1.5 mb-3">
-              {framework.map((step, i) => (
-                <li key={i} className="text-sm leading-6 flex items-start gap-2">
-                  <span className="text-green/60 font-mono text-[11px] mt-1 shrink-0">{i + 1}.</span>
-                  {step}
-                </li>
-              ))}
-            </ol>
-          )}
-          {fullAnswer && (
-            <div className="border-t border-green/15 pt-3 mt-2">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-green/60 mb-2">示例答案</div>
-              <p className="text-sm leading-7 text-text/85">{fullAnswer}</p>
-            </div>
-          )}
+          <p className="text-sm leading-7 text-text/85">{fullAnswer}</p>
         </div>
       )}
 

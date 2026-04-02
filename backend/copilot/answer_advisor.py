@@ -10,7 +10,7 @@ from backend.copilot.strategy_tree import StrategyTreeNavigator
 
 logger = logging.getLogger("uvicorn")
 
-_ADVISE_PROMPT = """你是一个面试教练。HR 刚问了候选人一个问题，请给出答题框架和完整示例答案。
+_ADVISE_PROMPT = """你是一个面试教练。HR 刚问了候选人一个问题，请给出完整示例答案。
 
 HR 的问题: {utterance}
 候选人背景亮点: {highlights}
@@ -18,10 +18,10 @@ HR 的问题: {utterance}
 已知回答要点参考: {key_points}
 
 要求：
-- framework: 2-4 步的答题结构，每步一句话
-- full_answer: 结合候选人背景的完整示例答案，200 字以内，自然口语化
-- 如涉及弱点领域，full_answer 中要有合理引导和转移
-输出严格 JSON: {{"framework": ["步骤1", "步骤2", ...], "full_answer": "完整答案"}}
+- full_answer: 结合候选人背景和上述要点，写一段完整的示例答案，200字以内，自然口语化，像候选人在面试中真实说的话
+- 如涉及弱点领域，答案中要有合理引导和转移
+- 不要重复罗列要点，直接输出一段完整的回答
+输出严格 JSON: {{"full_answer": "完整答案"}}
 只输出 JSON，不要其他内容。"""
 
 
@@ -30,7 +30,7 @@ async def advise_answer(
     node_id: str | None,
     navigator: StrategyTreeNavigator,
     prep_state: dict,
-    timeout: float = 3.0,
+    timeout: float = 10.0,
 ) -> dict:
     """生成答题框架和完整示例答案。
 
@@ -87,9 +87,8 @@ async def advise_answer(
     except Exception as e:
         logger.error(f"Answer advisor failed: {e}")
 
-    # 降级：用 key_points 拼一个基础框架
+    # 降级：LLM 失败时无示例答案
     return {
-        "framework": key_points[:4] if key_points else ["明确问题", "结合经验举例", "总结结论"],
         "full_answer": "",
         "risk_alert": risk_alert,
     }
@@ -111,10 +110,7 @@ def _parse_advice(raw: str) -> dict:
                 text = text[:-3]
         result = json.loads(text)
         if isinstance(result, dict):
-            return {
-                "framework": [str(s) for s in result.get("framework", [])],
-                "full_answer": str(result.get("full_answer", "")),
-            }
+            return {"full_answer": str(result.get("full_answer", ""))}
     except (json.JSONDecodeError, TypeError):
         logger.warning(f"Failed to parse answer advice: {raw[:200]}")
-    return {"framework": [], "full_answer": ""}
+    return {"full_answer": ""}
