@@ -6,7 +6,6 @@ import TaskNotification from "./components/TaskNotification";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
-import Home from "./pages/Home";
 import Interview from "./pages/Interview";
 import Review from "./pages/Review";
 import History from "./pages/History";
@@ -32,12 +31,7 @@ function ProtectedRoute({ children }) {
 function PublicHome() {
   const { token, loading } = useAuth();
   if (loading) return null;
-  if (token)
-    return (
-      <AppShell>
-        <Home />
-      </AppShell>
-    );
+  if (token) return <Navigate to="/profile" replace />;
   return <Landing />;
 }
 

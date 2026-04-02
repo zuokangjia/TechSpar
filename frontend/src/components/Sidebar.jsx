@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  Home, User, BookOpen, GitFork, Clock, Mic, BriefcaseBusiness, Brain,
+  User, BookOpen, GitFork, Clock, Mic, BriefcaseBusiness, Brain,
   Target, FileText, Settings as SettingsIcon,
   Sun, Moon, LogOut, Menu, X, ChevronLeft, ChevronRight,
 } from "lucide-react";
@@ -18,13 +18,12 @@ import {
 } from "@/components/ui/tooltip";
 
 const NAV_ITEMS = [
-  { path: "/", label: "首页", icon: Home },
+  { path: "/profile", label: "我的画像", icon: User },
   { path: "/topic-drill", label: "专项训练", icon: Target },
   { path: "/resume-interview", label: "简历面试", icon: FileText },
   { path: "/job-prep", label: "JD 备面", icon: BriefcaseBusiness },
   { path: "/recording", label: "录音复盘", icon: Mic },
   { path: "/copilot", label: "面试 Copilot", icon: Brain },
-  { path: "/profile", label: "我的画像", icon: User },
   { path: "/knowledge", label: "题库", icon: BookOpen },
   { path: "/graph", label: "图谱", icon: GitFork },
   { path: "/history", label: "历史记录", icon: Clock },
