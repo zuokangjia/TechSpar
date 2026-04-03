@@ -82,7 +82,7 @@ function ListView({ onNew, onSelect }) {
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/80">面试辅助</div>
-              <div className="mt-2 text-2xl font-display font-bold tracking-tight md:text-3xl">Interview Copilot</div>
+              <div className="mt-2 text-2xl font-display font-bold tracking-tight md:text-3xl">面试 Copilot</div>
               <div className="mt-1.5 max-w-2xl text-sm leading-6 text-dim">
                 提前准备好面试分析，面试时一键开启实时辅助。多 Agent 预测 HR 提问走向，实时给出回答建议。
               </div>
@@ -289,7 +289,7 @@ function DetailView({ prepId: initialPrepId, onBack, onStartInterview }) {
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/80">
                     {isNew ? "新建面试准备" : "面试准备详情"}
                   </div>
-                  <div className="mt-2 text-2xl font-display font-bold tracking-tight md:text-3xl">Interview Copilot</div>
+                  <div className="mt-2 text-2xl font-display font-bold tracking-tight md:text-3xl">面试 Copilot</div>
                   <div className="mt-1.5 max-w-2xl text-sm leading-6 text-dim">
                     {isNew
                       ? "填写目标公司和 JD，Copilot 会并行分析公司信息、拆解岗位要求、评估简历匹配度，生成 HR 提问策略树。"
@@ -777,7 +777,7 @@ function RealtimePhase({ prepId, onBack }) {
       <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0 bg-card/50">
         <div className="flex items-center gap-3">
           <Brain size={20} className="text-primary" />
-          <span className="font-semibold text-sm">Interview Copilot</span>
+          <span className="font-semibold text-sm">面试 Copilot</span>
           <Badge variant={connected ? "green" : "destructive"} className="text-xs">
             {connected ? "已连接" : "未连接"}
           </Badge>

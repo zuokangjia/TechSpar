@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="images/logo.png" alt="InterviewLoop" width="520" />
+<img src="images/logo.png" alt="TechSpar" width="520" />
 
 
 **把专项训练、简历面试、JD 备面、实时 Copilot 与录音复盘，串成一个持续进化的技术面试闭环。**
@@ -15,10 +15,10 @@
 [![License](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](LICENSE)
 
 
-![InterviewLoop 产品总览](images/interviewloop-overview.png)
+![TechSpar 产品总览](images/techspar-overview.png)
 </div>
 
-> InterviewLoop 的核心不是某一个单独功能页面。  
+> TechSpar 的核心不是某一个单独功能页面。  
 > 它的核心是同一套长期记忆、画像更新和下一轮训练调度机制。
 > 专项训练、简历面试、JD 备面、实时 Copilot 与录音复盘，不是彼此孤立的五个页面，而是围绕同一套长期记忆、掌握度和画像系统协同工作的同一个闭环。
 
@@ -31,9 +31,9 @@
 你今天答得差，系统知道。  
 但你明天再来，它又像第一次见你一样重新开始。
 
-InterviewLoop 要解决的不是“生成更多题”，而是把一次次训练、模拟、实战辅助和复盘连接起来，形成一条持续进化的路径：
+TechSpar 要解决的不是“生成更多题”，而是把一次次训练、模拟、实战辅助和复盘连接起来，形成一条持续进化的路径：
 
-| 传统面试工具 | InterviewLoop |
+| 传统面试工具 | TechSpar |
 | --- | --- |
 | 场景割裂：刷题、模拟、复盘各做各的 | 专项训练、简历面试、JD 备面、实时 Copilot 与录音复盘共用同一套画像与长期记忆 |
 | 每次开始都像第一次使用 | 每次进入新一轮前都会读取历史掌握度、薄弱点、训练轨迹和上下文 |
@@ -43,13 +43,13 @@ InterviewLoop 要解决的不是“生成更多题”，而是把一次次训练
 | 产品通常只覆盖单一环节 | 覆盖专项训练、简历面试、JD 备面、实时 Copilot 与录音复盘 |
 | 用完即结束 | 训练 -> 评估 -> 画像更新 -> 下轮更精准，形成持续进化闭环 |
 
-> **InterviewLoop 不是帮你“刷一轮题”，而是帮你建立一整套从备面到复盘、从单次训练到长期提升的技术面试闭环。**
+> **TechSpar 不是帮你“刷一轮题”，而是帮你建立一整套从备面到复盘、从单次训练到长期提升的技术面试闭环。**
 
 ---
 
 ## 题库为什么是核心设计
 
-很多人会把“题库”理解成一组固定题目列表，但 InterviewLoop 的题库不是这个意思。
+很多人会把“题库”理解成一组固定题目列表，但 TechSpar 的题库不是这个意思。
 
 它本质上是一个**动态出题底座**，不是一个“把旧题存起来给你反复刷”的静态题单。
 
@@ -63,7 +63,7 @@ InterviewLoop 要解决的不是“生成更多题”，而是把一次次训练
 也就是说：
 
 - 传统题库产品：先有一批固定题，再让你去做
-- InterviewLoop：先判断你现在最该练什么，再生成这一轮最合适的题
+- TechSpar：先判断你现在最该练什么，再生成这一轮最合适的题
 
 这也是为什么题库在这里不是边缘功能，而是整个闭环里的核心基础设施。
 
@@ -78,8 +78,6 @@ InterviewLoop 要解决的不是“生成更多题”，而是把一次次训练
 | admin@techspar.local | admin123 |
 
 > 演示环境请不要上传真实简历、真实录音或任何敏感个人信息。
-
----
 
 ---
 
@@ -191,7 +189,7 @@ ALLOW_REGISTRATION=false
 
 如果你要改成本地 embedding，继续补全 `.env.example` 里的 `LOCAL_EMBEDDING_*`。
 
-如果你要启用 Interview Copilot 的独立模型、实时语音识别或联网搜索，还需要继续补全这些可选项：
+如果你要启用面试 Copilot 的独立模型、实时语音识别或联网搜索，还需要继续补全这些可选项：
 
 ```env
 COPILOT_API_BASE=
