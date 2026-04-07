@@ -20,8 +20,17 @@ def sm2_update(sr_state: dict, score_0_10: float) -> dict:
     Returns:
         Updated SR state dict
     """
-    # Map 0-10 to SM-2 quality 0-5
-    quality = min(5, int(score_0_10 / 2))
+    # Map 0-10 to SM-2 quality 0-5 (pass threshold at 5/10)
+    if score_0_10 <= 2:
+        quality = 0
+    elif score_0_10 <= 4:
+        quality = 2
+    elif score_0_10 <= 5:
+        quality = 3
+    elif score_0_10 <= 7:
+        quality = 4
+    else:
+        quality = 5
     ef = sr_state.get("ease_factor", 2.5)
     reps = sr_state.get("repetitions", 0)
 

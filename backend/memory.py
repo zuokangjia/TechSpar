@@ -357,27 +357,7 @@ def get_profile_summary_for_drill(user_id: str) -> str:
 
 # ── Mem0-style LLM profile update ──
 
-def _parse_json_safe(content: str) -> dict | list:
-    """Parse JSON from LLM response, handling markdown code blocks."""
-    content = content.strip()
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        pass
-    m = re.search(r"```(?:json)?\s*\n?([\s\S]*?)\n?```", content)
-    if m:
-        try:
-            return json.loads(m.group(1).strip())
-        except json.JSONDecodeError:
-            pass
-    for i, c in enumerate(content):
-        if c in ("[", "{"):
-            try:
-                return json.loads(content[i:])
-            except json.JSONDecodeError:
-                pass
-            break
-    raise json.JSONDecodeError("No valid JSON found", content, 0)
+from backend.utils import parse_json_response as _parse_json_safe  # noqa: E402
 
 
 def _apply_memory_ops(profile: dict, ops: dict, topic: str | None, now: str, user_id: str = ""):
